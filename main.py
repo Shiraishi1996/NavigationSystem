@@ -29,11 +29,9 @@ def main():
     # Initilize
     from Driver import Driver
 
-    driver = Driver()
+    driver = Driver(args[1])
 
     try:
-        # Load parameters
-        driver.load_params(args[1])
         # Control Loop
         driver.do_operation()
     except KeyboardInterrupt:

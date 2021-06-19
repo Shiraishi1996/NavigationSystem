@@ -15,7 +15,6 @@ import time
 
 from ina226 import ina226
 from Logger import Logger
-from Params import Params
 from Pid import PositionalPID
 from PwmOut import PwmOut
 from PwmRead import PwmRead
@@ -39,8 +38,7 @@ ina226_averages_t = dict(
 class Driver:
     def __init__(self, filename):
         self._time_manager = TimeManager()
-        self._params = Params()
-        self._status = Status(self._params)
+        self._status = Status()
         self._sleep_time = 1
         self.log_time = time.time()
         self._pwm_read = PwmRead(
@@ -55,6 +53,39 @@ class Driver:
         self._pid = PositionalPID()
         self._logger = Logger()
         self._logger.open()
+
+        print("loading", filename)
+        with open(filename, "r") as f:
+            params = json.load(f)
+        self._time_manager.set_time_limit(params["time_limit"])  # Time Limit
+        self._log_interval = params["sleep_time"]
+        P = params["P"]
+        I = params["I"]
+        D = params["D"]
+        self._pid.set_pid(P, I, D)
+
+        for wp in params["waypoints"]:
+            name = wp["name"]
+            lat = wp["lat"]
+            lon = wp["lon"]
+            print(name, lat, lon)
+            self._status.waypoint.add_point(lat, lon)
+
+        self._gpio_mode_in = params["gpio"]["mode"]["in"]
+        self._gpio_servo_in = params["gpio"]["servo"]["in"]
+        self._gpio_thruster_in = params["gpio"]["thruster"]["in"]
+        self._gpio_or_in = params["gpio"]["or"]["in"]
+        self._gpio_servo_out = params["gpio"]["servo"]["out"]
+        self._gpio_thruster_out = params["gpio"]["thruster"]["out"]
+
+        self._pwm_read = PwmRead(
+            self._gpio_mode_in,
+            self._gpio_servo_in,
+            self._gpio_thruster_in,
+            self._gpio_or_in,
+        )
+        self._pwm_out = PwmOut(self._gpio_servo_out, self._gpio_thruster_out)
+
         # Whether experienced OR mode or not
         self._or_experienced = False
 
@@ -72,29 +103,6 @@ class Driver:
         time.sleep(1)
 
         print("Configuration Done")
-
-    def load_params(self, filename):
-        print("loading", filename)
-        with open(filename, "r") as f:
-            params = json.load(f)
-
-        time_limit = params["time_limit"]
-        sleep_time = params["sleep_time"]
-        P = params["P"]
-        I = params["I"]
-        D = params["D"]
-
-        self._time_manager.set_time_limit(time_limit)  # Time Limit
-        self._sleep_time = float(sleep_time)  # Sleep time
-        self._pid.set_pid(P, I, D)
-
-        for wp in params["waypoints"]:
-            name = wp["name"]
-            lat = wp["lat"]
-            lon = wp["lon"]
-            print(name, lat, lon)
-            self._status.waypoint.add_point(lat, lon)
-        return
 
     def do_operation(self):
         while self._time_manager.in_time_limit():
